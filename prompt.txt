@@ -1,0 +1,860 @@
+# MASTER PROMPT – SAN ANDREAS JUSTICE COMMAND SYSTEM
+
+## Unified Government, Law Enforcement, Prosecution & Judiciary Platform
+
+---
+
+# 0. KONTEXT UND AUFTRAG
+
+## 0.1 Worum es geht
+
+Dies ist ein Projekt für einen **GTA-RP-Server (ModernV)**. Alle Behörden, Gerichte, Ränge und Gesetze gehören zur fiktiven ModernV-Rechtsordnung. Gehe **nicht** automatisch von echtem US-Recht oder deutschem Recht aus.
+
+Für das **United States Marshals Service (USMS) Command System** existiert bisher nur das Branding-Paket, noch keine Anwendung. Deine Aufgabe ist, darauf aufbauend eine einzige, professionelle und tatsächlich funktionierende Plattform für drei Bereiche zu entwickeln:
+
+1. **United States Marshals Service (USMS)**
+2. **Prosecution / Staatsanwaltschaft**
+3. **Judiciary / Gerichtsbarkeit**
+
+Dazu kommen spezialisierte Organisationseinheiten mit eigenen Daten-, Zugriffs- und Workflow-Kontexten (nicht bloß zusätzliche Menüpunkte):
+
+* Special Investigations Division (SID)
+* Department of Commercial Licensing and Investigations (DCLI)
+* Registry Office
+* United States Special Judicial Authority (US-SJA)
+* Constitutional Court / Verfassungsgericht
+
+## 0.2 Vorhandene Grundlagen
+
+* **Projektordner:** `C:\Users\Lne´´\Desktop\usms-branding`. Hier gibt es noch keinen Server, keine Datenbank und keine Seiten. Die README des Branding-Pakets setzt einen Express-Server voraus, der `public/` statisch ausliefert. Die Plattform wird in diesem Ordner neu aufgebaut. Regel 1 („Bestehendes nicht zerstören“) gilt für das Branding-Paket: Seine API (`data-brand`, `USMSBrand`, `brand.config.js`) bleibt erhalten und wird nur erweitert.
+* **Branding-Paket:** `public/branding/` (`brand.config.js`, `branding.js`, `branding.css`, Siegel, Favicons, `examples/`, `README.md`). Lies die README vor jeder UI-Arbeit.
+* **ModernV-Rechtsquellen:** werden **später** bereitgestellt. Bis dahin gilt:
+  * Die rechtliche Prüfung aus Abschnitt 7 wird zurückgestellt. Sie blockiert weder Architektur noch Implementierung.
+  * Jede rechtlich relevante Funktion wird trotzdem vollständig und funktionsfähig gebaut, aber mit `LEGAL BASIS: NOT VERIFIED` markiert, und ihre Permissions bleiben konfigurierbar.
+  * Die Legal Authority Matrix wird schon angelegt. Die Spalte „Legal Basis“ bleibt `NOT VERIFIED`, bis die Quellen vorliegen.
+  * Auch ohne Quellen gilt: keine Paragraphen, Fristen oder Befugnisse erfinden.
+  * Liegen die Quellen vor, wird die Matrix nachgezogen und jede markierte Funktion geprüft und gegebenenfalls angepasst.
+* **Dokumentvorlagen des Auftraggebers:** die Beispiele in Abschnitt 8. Weitere Vorlagen folgen gegebenenfalls.
+
+## 0.3 Ergebnis
+
+Keine Sammlung getrennter Webseiten, sondern:
+
+> **eine einheitliche, professionelle, sichere und vollständig funktionierende Justice & Government Command Platform mit gemeinsamer Infrastruktur und strikt kontrollierter organisatorischer Trennung.**
+
+Behandle dieses Dokument als übergeordnetes Product Requirement Document. Die konkrete technische Architektur richtet sich nach dem vorhandenen Projekt.
+
+---
+
+# 1. GRUNDREGELN
+
+Diese Regeln gelten für jede Phase und haben Vorrang vor allen Detailanforderungen.
+
+1. **Bestehendes nicht blind zerstören.** Erst analysieren, dann erweitern. Nicht ohne Grund alles löschen, das Frontend ersetzen, die Datenbank neu anlegen oder funktionierende USMS-Funktionen entfernen. Ist ein Umbau wirklich nötig, begründe ihn zuerst in `ARCHITECTURE_DECISIONS.md` und migriere schrittweise.
+2. **Keine Fassade.** Was im UI existiert, muss funktionieren: Ein angelegter Case wird gespeichert, eine Signatur wird persistiert, ein Statuswechsel wird gespeichert, ein Audit-Event wird geschrieben, Notifications stammen aus echten Systemereignissen, die Suche durchsucht echte Daten, ein Antrag startet echt den Workflow. Keine `alert("Coming soon")`-Buttons, keine Fake-APIs, keine Fake-Datenbank, kein „Success“ ohne Speichern. Was noch nicht geht, ist sichtbar deaktiviert, als nicht fertig gekennzeichnet und dokumentiert.
+3. **Nichts erfinden.** Keine Paragraphen, Gerichte, Zuständigkeiten, Ränge, Behördenbefugnisse, Rechtsmittel, Fristen, Daten oder fertige Funktionalität. Fehlende Informationen heißen `NOT SPECIFIED` bzw. `CONFIGURABLE`.
+4. **Autorisierung immer serverseitig.** Das Frontend ist nie eine Sicherheitsgrenze. Ein ausgeblendeter Button ist keine Sicherheit. Jeder Backend-Endpunkt autorisiert selbst, und zwar auf Objektebene (Abschnitt 5.6).
+5. **Human-in-the-Loop.** Die Software trifft keine rechtlich erheblichen Entscheidungen (Abschnitt 7.5).
+6. **Keine unbelegte Fertigmeldung.** Das System gilt erst als fertig, wenn die Definition of Done erfüllt ist (Abschnitt 12).
+7. **Widersprüche nicht raten.** Widerspricht sich diese Spezifikation oder widerspricht sie den Rechtsquellen, dokumentiere den Konflikt und frage nach, statt eine Variante still zu wählen.
+8. **Ursachen beheben, nicht umgehen.** Bestehende Probleme im Projekt analysierst du, behebst sie sauber, testest sie und dokumentierst die Änderung.
+9. **Kein Overengineering ohne Grund.** Die Anwendung ist groß und braucht daher von Anfang an eine saubere Struktur, aber keine Architektur, die nicht gebraucht wird.
+
+---
+
+# 2. VORGEHEN IN PHASEN
+
+Nicht alles in einem Schritt programmieren. Nach jeder Phase gilt:
+
+```text
+IMPLEMENT → TEST → VERIFY → DOCUMENT → CONTINUE
+```
+
+Halte `CURRENT_STATE.md` laufend aktuell, auch mit dem Stand, was erledigt, in Arbeit und offen ist. Eine neue Session muss daran nahtlos weiterarbeiten können.
+
+## PHASE 1 – AUDIT (keine destruktiven Änderungen)
+
+Analysiere mindestens: Framework, Frontend, Backend, Datenbank, ORM, API-Struktur, Authentifizierung, Autorisierung, Benutzerverwaltung, bestehende Rollen und Permissions, Routing, Komponenten, Layout, Styling, Assets/Branding, bestehende USMS-Funktionen, Datenmodelle, Workflows, Dokumentenverwaltung, Suche, Notifications, Audit-Funktionen, Deployment, Umgebungsvariablen, Migrationen, Build-Prozess, Tests und technische Schulden.
+
+Ergebnis:
+
+* `ARCHITECTURE.md` beschreibt das aktuelle System nachvollziehbar.
+* `CURRENT_STATE.md` hält fest: was funktioniert, was nur teilweise funktioniert, was nur Mockup ist, was fehlt, was wiederverwendbar ist, was refaktoriert und was ersetzt werden muss.
+
+## PHASE 2 – ARCHITEKTUR, RECHT UND PLAN
+
+Erstelle bzw. ergänze:
+
+```text
+ARCHITECTURE.md
+DATA_MODEL.md
+PERMISSIONS.md
+WORKFLOWS.md
+LEGAL_AUTHORITY_MATRIX.md
+SECURITY_MODEL.md
+ARCHITECTURE_DECISIONS.md
+```
+
+Prüfe dafür die ModernV-Rechtsquellen für alle rechtlich relevanten Funktionen (Abschnitt 7) und erstelle einen Implementierungsplan.
+
+> **Checkpoint:** Lege nach Phase 2 eine Zusammenfassung vor, mit Architektur, Datenmodell, Permission-Matrix, Legal Authority Matrix, offenen Fragen und Widersprüchen. Warte auf Freigabe, bevor du mit Phase 3 beginnst.
+
+## PHASE 3 – SHARED CORE
+
+Authentication, User Management, Organization Management, RBAC mit granularen Permissions, Case Management, Document Management, Evidence, Workflows, Notifications, Messaging, Audit Logs, Search, Dashboard-Framework.
+
+## PHASE 4 – USMS
+
+Bestehende USMS-Funktionen erhalten und an den Shared Core anbinden.
+
+## PHASE 5 – JUDICIARY
+
+District Court, Court of Appeals, Supreme Court.
+
+## PHASE 6 – PROSECUTION
+
+Office of the District Attorney, Office of the State Attorney, Office of the Attorney General.
+
+## PHASE 7 – SPEZIALEINHEITEN
+
+SID, DCLI, Registry Office, danach US-SJA und Constitutional Court.
+
+## PHASE 8 – CROSS-DEPARTMENT WORKFLOWS
+
+Kommunikation und Vorgangsübergabe zwischen USMS, Prosecution, Judiciary, DCLI, Registry und US-SJA.
+
+## PHASE 9 – SECURITY-AUDIT
+
+Vollständige Überprüfung von Authorization, Data Isolation, Case Access, Document Access, Audit Logs, Security Levels, Sealed und Classified Records sowie Suche und Notifications auf Informationslecks.
+
+## Tests nach jeder Phase
+
+Führe die Befehle des bestehenden Projekts aus, z. B.:
+
+```text
+npm test
+npm run lint
+npm run typecheck
+npm run build
+```
+
+Dazu kommen Unit-, Integrations-, Autorisierungs- und Workflow-Tests für das jeweilige Modul. Keine Funktion gilt als fertig, nur weil die UI existiert.
+
+---
+
+# 3. ZIELARCHITEKTUR
+
+## 3.1 Eine Plattform
+
+Es entstehen **nicht** drei separate Systeme. Es gibt genau **eine** Benutzerverwaltung, **eine** Authentifizierung, **ein** Case-System, **ein** Dokumentensystem, **ein** Notification-System, **ein** Messaging-System, **ein** Audit-System, **eine** Suche und **ein** Permission-System.
+
+Jede Behörde sieht nur das, wozu sie berechtigt ist.
+
+## 3.2 Struktur
+
+Ränge sind jeweils von oben (höchster Rang) nach unten aufgeführt.
+
+```text
+SAN ANDREAS JUSTICE COMMAND SYSTEM
+│
+├── SHARED CORE
+│   ├── Authentication · Users · Organizations
+│   ├── RBAC · Permissions · Security Levels
+│   ├── Cases · Documents · Evidence · Digital Signatures
+│   ├── Workflows · Hearings · Deadlines
+│   ├── Messaging · Notifications · Search
+│   └── Audit Logs
+│
+├── UNITED STATES MARSHALS SERVICE
+│
+├── PROSECUTION
+│   ├── Office of the District Attorney
+│   │   ├── District Attorney
+│   │   ├── Assistant District Attorney
+│   │   ├── Senior Prosecutor
+│   │   ├── Prosecutor
+│   │   ├── Junior Prosecutor
+│   │   └── Probationary Prosecutor
+│   ├── Office of the State Attorney
+│   │   ├── Senior State Attorney
+│   │   └── State Attorney
+│   ├── Office of the Attorney General
+│   │   ├── Attorney General
+│   │   ├── Deputy Attorney General
+│   │   └── Assistant Attorney General
+│   ├── Special Investigations Division (SID)
+│   └── Department of Commercial Licensing and Investigations (DCLI)
+│
+└── JUDICIARY
+    ├── District Court
+    │   ├── Principal Judge
+    │   ├── Senior Judge
+    │   ├── Judge
+    │   └── Probationary Judge
+    ├── Court of Appeals
+    │   ├── Presiding Justice
+    │   ├── Senior Appellate Justice
+    │   └── Appellate Justice
+    ├── Supreme Court
+    │   ├── Chief Justice
+    │   ├── Deputy Chief Justice
+    │   └── Associate Justice
+    ├── Registry Office
+    ├── United States Special Judicial Authority (US-SJA)
+    │   ├── Principal Judge
+    │   ├── Presiding Justice
+    │   └── Supreme Court (Chief Justice, Deputy Chief Justice, Associate Justice)
+    └── Constitutional Court   (Zusammensetzung laut ModernV-Verfassung, nicht erfinden)
+```
+
+Organisationen und Ränge werden **nicht hartcodiert**, sondern über die Organisationsverwaltung gepflegt (Abschnitt 5.9). Die obige Struktur ist der initiale Seed.
+
+---
+
+# 4. ORGANISATIONSEINHEITEN
+
+## 4.1 United States Marshals Service (USMS)
+
+Das bestehende USMS-System bleibt Bestandteil der Plattform. Alle funktionierenden Funktionen bleiben erhalten und werden an den Shared Core angebunden.
+
+USMS muss unter anderem unterstützen: Personnel, Ranks, Assignments, Operations, Warrants (Vollstreckung), Arrests, Prisoner Transport, Court Security, Reports, Investigations, Evidence, Applications (Bewerbungen), Tasks, Communications, Case Management, Dokumente, Audit Logs.
+
+## 4.2 Prosecution
+
+Drei Offices mit eigener, technisch abgebildeter Rangfolge (siehe 3.2):
+
+* **Office of the District Attorney:** District Attorney > Assistant District Attorney > Senior Prosecutor > Prosecutor > Junior Prosecutor > Probationary Prosecutor
+* **Office of the State Attorney:** Senior State Attorney > State Attorney
+* **Office of the Attorney General:** Attorney General > Deputy Attorney General > Assistant Attorney General
+
+## 4.3 Special Investigations Division (SID)
+
+Spezialisierte Ermittlungsdivision der Staatsanwaltschaft mit eigenen Ermittlungsakten, Fällen, Dokumenten, Beweismitteln, Ermittlungsnotizen, Aufgaben, Fristen, Kommunikation und Audit Logs.
+
+* SID-Akten sind **nicht** automatisch für jeden Prosecutor sichtbar.
+* Zugriffsmodell mindestens `SID_ACCESS` und `SID_RESTRICTED_ACCESS`, gern granularer (umgesetzt als Compartment, siehe 5.4).
+* Die rechtlichen Befugnisse der SID leitest du **nicht** aus dem Namen ab, sondern belegst sie mit den ModernV-Rechtsquellen.
+
+## 4.4 Department of Commercial Licensing and Investigations (DCLI)
+
+Eigene Organisationseinheit mit eigenem **Commercial Licensing & Investigations Module**. Zuständig für Gewerbe- und Rohstofflizenzen (Antrag, Änderung, Verlängerung, Widerruf), Lizenzregister, Gewerbeaufsicht, gewerbliche Ermittlungen, Kontrollen, Prüfungen, Dokumentenanforderungen und Verwaltungsmaßnahmen.
+
+* **Gewerberegister:** Unternehmen, Gewerbetreibende, verantwortliche Personen, Mitarbeiter, Lizenznummer, Lizenztyp, Status, Gültigkeit, Auflagen, Prüfungen, Verstöße, Maßnahmen, Gebühren.
+* **Rohstofflizenzen:** Antrag, Lizenz, Lizenzinhaber, Rohstoffart, Gültigkeit, Auflagen, Kontrolle, Verlängerung, Widerruf, Gebühren.
+* **DCLI Investigations:** Investigation Case, betroffene Personen und Unternehmen, Dokumente, Beweismittel, Prüfberichte, Ermittlungsmaßnahmen, Feststellungen, Maßnahmen, Folgeverfahren.
+* **Lizenz-Workflow (Beispiel, konfigurierbar):**
+
+```text
+DRAFT → SUBMITTED → UNDER REVIEW → ADDITIONAL INFORMATION REQUESTED
+      → APPROVED / DENIED → ISSUED → ACTIVE → SUSPENDED / REVOKED / EXPIRED
+```
+
+Jeder Statuswechsel ist vollständig auditierbar. Rechtsgrundlage prüfen: insbesondere Gewerbeordnung und Wirtschaftsgesetz.
+
+## 4.5 District Court
+
+Ränge: Principal Judge > Senior Judge > Judge > Probationary Judge.
+
+Unterstützt mindestens: Strafsachen, Zivilsachen, Anträge, Haftbefehle, Durchsuchungsbeschlüsse, Vorladungen, Beschlüsse, Urteile, Anhörungen, Akten, Parteien, Beweismittel, Fristen, Dokumente, Signaturen.
+
+## 4.6 Court of Appeals
+
+Ränge: Presiding Justice > Senior Appellate Justice > Appellate Justice.
+
+Unterstützt: Appeals, Berufungsakten, Verknüpfung zur Vorinstanz, Entscheidungen, Anhörungen, Panels/Spruchkörper, Dokumente, Fristen, Signaturen, Kommunikation.
+
+## 4.7 Supreme Court
+
+Ränge: Chief Justice > Deputy Chief Justice > Associate Justice.
+
+Vollständig eigenständiges Modul mit Supreme-Court Cases, Appeals, Review Proceedings, Hearings, Decisions, Opinions, Documents, Signatures, Panels, Fristen und interner Kommunikation.
+
+## 4.8 Registry Office
+
+Register- und Standesfunktionen der Judiciary: Geburtsurkunden, Hochzeiten, Scheidungen, Adoptionen, Registerführung, Ausstellung von Urkunden, Anträge, Registerdokumente, Registerhistorie.
+
+Module: `Birth Records`, `Marriage Records`, `Divorce Records`, `Adoption Records`, `Certificates`, `Registry Applications`, `Registry Documents`, `Registry History`.
+
+Registry-Daten sind besonders geschützt:
+
+* kein globaler Zugriff
+* kein automatischer Zugriff durch normale Court- oder Prosecution-User (eigenes Compartment, siehe 5.4)
+* jeder Zugriff wird auditiert
+* Rechtsgrundlagen nur aus den bereitgestellten ModernV-Quellen
+
+## 4.9 United States Special Judicial Authority (US-SJA)
+
+Geheime gerichtliche Institution, **vollständig getrennt** von den normalen Gerichten und **nicht** als District-Court-Modul umgesetzt.
+
+* **Zusammensetzung:** Principal Judge, Presiding Justice und der Supreme Court (Chief Justice, Deputy Chief Justice, Associate Justice).
+* **Zugriffsebenen (administrierbar):** `US-SJA`, `US-SJA RESTRICTED`, `US-SJA SEALED`, `US-SJA CLASSIFIED`
+* **Unterstützt:** geheime Anträge, geheime Verfahren, versiegelte Akten, geheime Entscheidungen, eingeschränkte Dokumente, besondere Anhörungen, beschränkte Beteiligte, spezielle Benachrichtigungen.
+* Nicht berechtigte Benutzer dürfen **nicht erkennen können, dass ein solcher Vorgang existiert**: nicht über Suche, Zähler, Notifications, Case-Verknüpfungen, Fehlermeldungen (403 vs. 404) oder Audit-Ansichten.
+
+## 4.10 Constitutional Court / Verfassungsgericht
+
+Eigenständige Institution, **nicht** identisch mit dem Supreme Court und nicht automatisch mit ihm verschmolzen.
+
+* Zusammensetzung, Ränge und Zuständigkeiten ermittelst du **ausschließlich** aus der ModernV-Verfassung. Nichts erfinden.
+* **Constitutional Review Module**, soweit durch die Verfassung gedeckt, z. B.: Constitutional Review, Gesetzesprüfung, Prüfung von Gesetzesentwürfen, Verfassungsbeschwerden/Vorlagen, Verfassungskonflikte, verfassungsgerichtliche Entscheidungen.
+* Nicht gedeckte Verfahrensarten bleiben `CONFIGURABLE / DISABLED`.
+
+---
+
+# 5. ZUGRIFFSMODELL
+
+Priorität 1 des gesamten Projekts.
+
+## 5.1 Rang ≠ Rolle ≠ Permission
+
+Ein Rang ist **nicht** gleich einem Berechtigungsset.
+
+Falsch:
+
+```text
+if rank == "Chief Justice": allowEverything()
+```
+
+Richtig: Die Entscheidung ergibt sich aus der Kombination von
+
+```text
+User + Institution + Office + Division + Rank + System Role
++ Permission + Case Access + Document Access
++ Security Level + Compartment + Workflow State
+```
+
+Das System trennt diese Begriffe durchgängig. Beispiel:
+
+```text
+Institution:  Judiciary
+Office:       District Court
+Rank:         Senior Judge
+Role:         Judge / Case Reviewer
+Permission:   WARRANT_REVIEW
+Case Access:  Case CR-2026-0001
+Security:     CONFIDENTIAL
+```
+
+## 5.2 Granulare Permissions
+
+Startliste. Du darfst und sollst sie in der Architekturphase erweitern.
+
+```text
+CASE_CREATE  CASE_VIEW  CASE_EDIT  CASE_CLOSE  CASE_ARCHIVE  CASE_SHARE  CASE_EXPORT
+DOCUMENT_CREATE  DOCUMENT_VIEW  DOCUMENT_EDIT  DOCUMENT_DELETE  DOCUMENT_SIGN
+DOCUMENT_APPROVE  DOCUMENT_REJECT  DOCUMENT_DOWNLOAD
+WARRANT_CREATE  WARRANT_VIEW  WARRANT_REVIEW  WARRANT_APPROVE  WARRANT_DENY  WARRANT_SIGN  WARRANT_ISSUE
+HEARING_CREATE  HEARING_EDIT  HEARING_SCHEDULE  HEARING_CANCEL
+USER_VIEW  USER_CREATE  USER_EDIT  USER_DISABLE
+ROLE_ASSIGN  PERMISSION_ASSIGN
+AUDIT_VIEW  AUDIT_EXPORT
+SID_ACCESS  SID_RESTRICTED_ACCESS
+DCLI_LICENSE_CREATE  DCLI_LICENSE_REVIEW  DCLI_LICENSE_APPROVE  DCLI_LICENSE_REVOKE
+REGISTRY_VIEW  REGISTRY_CREATE  REGISTRY_EDIT  REGISTRY_CERTIFICATE_ISSUE
+US_SJA_ACCESS  US_SJA_CLASSIFIED_ACCESS
+CONSTITUTIONAL_REVIEW_CREATE  CONSTITUTIONAL_REVIEW_VIEW  CONSTITUTIONAL_DECISION_SIGN
+```
+
+## 5.3 Security Levels
+
+Konfigurierbare, geordnete Stufen, z. B.:
+
+```text
+PUBLIC < INTERNAL < RESTRICTED < CONFIDENTIAL < SEALED < CLASSIFIED
+```
+
+Nicht jeder Benutzer darf jedes Level sehen. Die Security Clearance des Users muss mindestens dem Level des Objekts entsprechen.
+
+## 5.4 Compartments (Need-to-know)
+
+SID, Registry und US-SJA sind **keine höheren Stufen** auf derselben Skala, sondern getrennte Bereiche. Eine hohe Clearance allein gewährt keinen Zugriff. Modelliere sie als Compartments, die zusätzlich zum Security Level erforderlich sind:
+
+```text
+Zugriff = Permission ∧ Clearance ≥ Level ∧ User besitzt alle Compartments des Objekts ∧ Case/Document Access
+```
+
+Beispiel: Ein US-SJA-Dokument mit `CLASSIFIED + Compartment US-SJA` ist für einen Chief Justice ohne US-SJA-Compartment unsichtbar. Die Zuordnung der Ebenen aus 4.9 zu Level + Compartment dokumentierst du in `SECURITY_MODEL.md`.
+
+## 5.5 Case Access
+
+**Grundsatz (Entscheidung des Auftraggebers):** Innerhalb des **eigenen Office** sind Akten grundsätzlich für alle Mitglieder mit `CASE_VIEW` sichtbar, damit keine unnötige Bürokratie entsteht. Das gilt **nicht** über Office-Grenzen hinweg (ein DA-Prosecutor sieht keine AG-Akten, ein District-Court-Richter keine Akten des Court of Appeals) und nicht für versiegelte Akten oder Akten mit expliziter Zugriffspflicht (z. B. `SID_RESTRICTED`, `US-SJA RESTRICTED`). Compartments und Security Level gelten immer zusätzlich. Die Office-Sichtbarkeit ist pro Case Type abschaltbar. Unterstütze: Department Access, Office Access, Role Access, User Access, Security Level, Compartment, Case Participant Access, Delegated Access, Temporary Access.
+
+## 5.6 Object-Level Authorization
+
+Es reicht nicht, `user.isProsecutor` zu prüfen. Die Frage lautet: *Darf dieser konkrete Prosecutor diese konkrete Akte sehen?*
+
+```text
+can(user, "CASE_VIEW", case)
+```
+
+Diese Prüfung läuft auf **jedem** Backend-Endpunkt, für Listen, Details, Downloads, Exporte, Suche und Notifications. Frontend-Checks dienen nur der Benutzerführung.
+
+## 5.7 Sealed Records
+
+Ohne Berechtigung: kein Inhalt, keine Dokumente, keine Teilnehmer, keine Suchresultate, keine Notifications über sensible Inhalte. Sealing und Unsealing werden auditiert.
+
+## 5.8 Delegation / Vertretung
+
+Zeitlich begrenzte Delegation (`User A delegiert Permission X an User B`) mit Beginn, Ende, Umfang, Begründung, Genehmiger und Audit Log. Delegation kann nie mehr Rechte übertragen, als der Delegierende selbst hat.
+
+## 5.9 Organisations- und Benutzerverwaltung
+
+* **Organisationen:** Departments, Offices, Divisions, Ranks (mit Hierarchie pro Organisation), Roles, Permissions sind zentral verwaltbar, nicht hartcodiert.
+* **User Profile:** Name, Badge/ID, Department, Office, Division, Rank, Role, Permissions, Security Clearance, Compartments, Status, Supervisor, Kontakt, Created At, Last Login. Ein User kann mehreren Organisationen angehören.
+* **Admin-Ebenen**, granular konfigurierbar: `SYSTEM ADMIN`, `ORGANIZATION ADMIN`, `DEPARTMENT ADMIN`, `OFFICE ADMIN`, `SECURITY ADMIN`, `AUDIT ADMIN`. Nicht jeder Admin darf alles. Ein Office Admin kann z. B. keine US-SJA-Compartments vergeben.
+
+## 5.10 Authorization-Testmatrix
+
+Schreibe Tests nach dem Muster:
+
+```text
+Probationary Prosecutor        → cannot access restricted judicial case
+Judge                          → can access assigned court case
+DCLI user                      → cannot access unrelated prosecution case
+Prosecutor without SID access  → cannot see SID case
+Court user                     → cannot access registry record
+US-SJA authorized user         → can access US-SJA case
+Chief Justice without US-SJA   → cannot access US-SJA case
+normal user                    → cannot discover US-SJA case via search, notifications or linked cases
+Frontend hidden button         → API call still returns 403/404
+```
+
+Die tatsächlichen Regeln ergeben sich aus der konfigurierten Permission Matrix.
+
+---
+
+# 6. SHARED CORE – FACHLICHE MODULE
+
+## 6.1 Case Management
+
+Alle Abteilungen nutzen ein gemeinsames Case Management mit konfigurierbaren Case Types, z. B.:
+
+```text
+CRIMINAL  CIVIL  APPEAL  SUPREME_COURT  CONSTITUTIONAL  WARRANT  ARREST_WARRANT
+SUBPOENA  SID_INVESTIGATION  DCLI_INVESTIGATION  LICENSING  REGISTRY  US_SJA  USMS_OPERATION
+```
+
+* **Timeline:** Jede Akte hat eine auditierbare Timeline (Case Created → Document Added → Investigation Started → Application Submitted → Reviewed → Hearing Scheduled → Decision Issued → Appeal Filed → Case Closed …).
+* **Case Relationships:** Akten sind verknüpfbar (SID Investigation → Prosecution Case → District Court → Court of Appeals → Supreme Court). **Eine Verknüpfung gewährt keinen Zugriff**, und unberechtigte User sehen nicht einmal, dass eine geschützte Verknüpfung existiert.
+* **Case Switcher:** schneller Wechsel zwischen Akten, auf die der User Zugriff hat.
+
+## 6.2 Document Management
+
+Zentral für alle Bereiche: PDF, Versionen und Version History, Vorlagen, Metadaten, Zugriffskontrolle, Signaturen, Freigaben, Archivierung, Downloads, Audit Trail.
+
+## 6.3 Digitale Signaturen
+
+Gespeichert werden: signierende Person, Rang, Institution, Zeitpunkt, signierte Dokumentversion (inkl. Hash), Signaturstatus. Eine Signatur ist nie nur ein UI-Zustand. Der Backend-Prozess speichert sie nachvollziehbar, und eine spätere Änderung des Dokuments macht die Signatur für diese Version erkennbar ungültig.
+
+## 6.4 Evidence Management und Chain of Custody
+
+Evidence ID, Beschreibung, Kategorie, Case, Besitzer, Aufnahmezeitpunkt, Standort, Status, Dokumente, Fotos/Dateien, Audit Log.
+
+Jede Übergabe speichert `FROM`, `TO`, `DATE/TIME`, `LOCATION`, `REASON` und `SIGNATURE`. Die Historie ist append-only und lässt sich nicht stillschweigend ändern.
+
+## 6.5 Workflows
+
+Workflows sind konfigurierbar, und nicht jeder Vorgang braucht alle Zustände. Jeder Statuswechsel wird persistiert und auditiert.
+
+**Gerichtlicher Antrag (Beispiel):**
+
+```text
+DRAFT → SUBMITTED → UNDER REVIEW → REVISION REQUESTED → APPROVED / DENIED
+      → SIGNED → ISSUED → EXECUTED → CLOSED
+```
+
+**Haftbefehl / Durchsuchungsbeschluss (Cross-Department):**
+
+```text
+Prosecution / Authorized Applicant
+  → Warrant Application
+  → District Court: Judicial Review
+  → APPROVED / DENIED / REVISION REQUESTED   (Entscheidung ausschließlich durch Richter)
+  → Digital Signature → ISSUED
+  → USMS / Authorized Agency: EXECUTION
+  → Execution Report → zurück an Court Case
+```
+
+Die Software entscheidet **nie** selbst, ob ein Antrag genehmigt wird.
+
+## 6.6 Hearings und Deadlines
+
+* **Hearings:** Kalender, Richter, Parteien, Anwälte, Staatsanwälte, Zeugen, Räume, Datum/Uhrzeit, Status, Dokumente, Protokolle.
+* **Deadlines:** Fristen mit verantwortlicher Person und Case-Zuordnung, automatische Erinnerungen, überfällige Vorgänge, Fristverlängerungen. Fristdauern nur aus Rechtsquellen, sonst konfigurierbar.
+
+## 6.7 Kommunikation
+
+* **Direct Messages:** User ↔ User
+* **Department Messages:** Department ↔ Department
+* **Case Messages:** zwischen Case-Beteiligten
+* **Official Requests:** Institution → Institution (z. B. DCLI → Judiciary, Prosecution → Judiciary, Judiciary → USMS, Prosecution → USMS, USMS → Judiciary, Registry → Judiciary) mit Request ID, Sender, Receiver, Case, Dokumenten, Priority, Deadline, Status, Response und Audit Trail.
+* **Workflow Messages:** System → zuständiger User
+
+Alle Nachrichten respektieren Berechtigungen.
+
+## 6.8 Notifications
+
+In-App Notifications mit Unread Counts für Cases, Workflows, Hearing- und Deadline-Reminder, Dokumente, Approval- und Signature-Requests. Notifications verraten keine Inhalte geschützter Akten an Unberechtigte.
+
+## 6.9 Globale Suche
+
+Personen, Fälle, Akten, Dokumente, Unternehmen, Lizenzen, Gerichtstermine, Nachrichten.
+
+**Die Suche respektiert die Autorisierung**, und zwar serverseitig vor dem Zurückgeben der Treffer, nicht durch nachträgliches Ausblenden im Frontend. Bei hochgeschützten Akten bleibt selbst die Existenz verborgen, also auch in Trefferzahlen.
+
+## 6.10 Zentrale Personenakte
+
+Eine Person kann mit USMS, Prosecution, Judiciary, DCLI, Registry, Cases, Warrants, Documents, Licenses und Court Proceedings verknüpft sein. Jede einzelne Beziehung bleibt über Berechtigungen geschützt.
+
+## 6.11 Audit Log und System Log
+
+**Audit Log** (zentral, append-only, möglichst manipulationsgeschützt, z. B. durch Hash-Verkettung): Login, Logout, fehlgeschlagene Logins, Case- und Document-Access, Download, Upload, Create, Edit, Delete, Share, Export, Permission-, Rank- und Role-Changes, Signatures, Approvals, Denials, Sealing, Unsealing, administrative Aktionen.
+
+**Audit UI** für berechtigte Admins mit Filtern nach User, Department, Office, Case, Action, Date, Security Level, IP und Resource. Auch die Audit-Ansicht respektiert Compartments.
+
+**System Log** getrennt davon für technische Fehler.
+
+## 6.12 Exporte, Reports, Aufbewahrung
+
+* **Exporte:** nur mit Permission, mit Security-Level- und Compartment-Prüfung, immer auditiert.
+* **Reports:** Cases, Investigations, Licenses, Hearings, Warrants, Personnel, Workflows, Audit Events.
+* **Aufbewahrungsfristen:** nur aus den Rechtsquellen, sonst konfigurierbar. Keine erfundenen Fristen.
+
+---
+
+# 7. RECHTLICHE GRUNDLAGEN
+
+## 7.1 Quellen
+
+Die bereitgestellten ModernV-Rechtsdokumente (Pfad siehe 0.2) sind die primäre und einzige Rechtsgrundlage, insbesondere:
+
+Verfassung · Strafgesetzbuch · Strafprozessordnung · Bürgerliches Gesetzbuch · Landesmedizin- und Gesundheitsgesetz · Waffengesetz · Betäubungsmittelgesetz · Pressegesetz · Landespolizeigesetz · Landesbeamtengesetz · Gewerbeordnung · Wirtschaftsgesetz · Fahrerlaubnisverordnung · Landeshaushaltsgesetz · Gerichtsordnung · Parlamentsordnung · Straßenverkehrsordnung · Luftfahrtverordnung · Promotions- und Titelführungsordnung · Landesrechtsanwaltsordnung, sowie weitere bereitgestellte Quellen.
+
+Zuordnung der wichtigsten Quellen:
+
+| Bereich | Vorrangig zu prüfen |
+|---|---|
+| Gerichtsorganisation, Gewaltenteilung, Supreme Court, Verfassungsprüfung, richterliche Unabhängigkeit, US-SJA, Constitutional Court | Verfassung |
+| Haftbefehle, Durchsuchungen, Ermittlungs- und Zwangsmaßnahmen, richterliche Genehmigungen, Verfahrensfragen | Strafprozessordnung |
+| Gerichtsorganisation, Sitzungen, Gerichtspersonal, Verfahrensabläufe | Gerichtsordnung |
+| DCLI | Gewerbeordnung, Wirtschaftsgesetz |
+| Registry | die tatsächlich bereitgestellten Quellen (kein Rückgriff auf US- oder deutsches Recht) |
+
+## 7.2 Prüfung vor jeder Funktion mit rechtlicher Wirkung
+
+1. Relevante ModernV-Rechtsquelle suchen.
+2. Konkrete Vorschrift identifizieren.
+3. In `LEGAL_AUTHORITY_MATRIX.md` dokumentieren.
+4. Die daraus belegte Funktion bestimmen.
+5. Nur implementieren, was die Quelle tatsächlich trägt.
+
+Gibt die Quelle keine konkrete technische Regel vor, mache die Permission konfigurierbar.
+
+## 7.3 Legal Authority Matrix
+
+Für jede wichtige Funktion:
+
+```text
+Institution | Function | Legal Basis | Permission | Workflow | Human Decision Required
+District Court | Search Warrant | ModernV StPO § … | WARRANT_REVIEW | Judicial Review | YES
+```
+
+Ohne ausreichende Rechtsgrundlage:
+
+```text
+LEGAL BASIS: NOT VERIFIED
+STATUS: CONFIGURABLE / DISABLED
+```
+
+## 7.4 Legal Reference UI
+
+Bei juristischen Vorgängen zeigt die Software die geprüfte Rechtsgrundlage an (z. B. „ModernV Strafprozessordnung § X Abs. Y“ mit Referenz). Sie behauptet nie, eine Norm sei einschlägig, wenn das nicht geprüft wurde.
+
+## 7.5 Keine Automatisierung juristischer Entscheidungen
+
+Die Plattform darf **niemals** selbstständig Haftbefehle erlassen, Durchsuchungen genehmigen, Personen verurteilen, Verfassungswidrigkeit feststellen, Adoptionen genehmigen oder sonstige gerichtliche Entscheidungen treffen.
+
+Sie darf: Informationen bereitstellen, Rechtsgrundlagen anzeigen, Anträge strukturieren, Workflows ausführen, Dokumente vorbereiten, Fristen verwalten und Entscheidungen dokumentieren.
+
+**Software unterstützt, die zuständige Person entscheidet.**
+
+---
+
+# 8. DOKUMENTE UND VORLAGEN
+
+## 8.1 Dokumenttypen
+
+Professionelle Vorlagen für: Court Orders, Search Warrants, Arrest Warrants, Subpoenas, Judgments, Prosecutorial Documents, DCLI Licenses, Registry Certificates, Administrative Orders.
+
+Je nach Typ enthalten sie: Institution, Aktenzeichen, Datum, Beteiligte, Titel, Rechtsgrundlage, Entscheidung, Signatur.
+
+Nutze die vorhandenen Vorlagen des Auftraggebers, soweit sie passen. Andere Dokumente dürfen frei gestaltet sein, müssen aber stilistisch und institutionell zu ihnen passen.
+
+## 8.2 Technische Basis
+
+Baue auf dem bestehenden Branding-Paket auf (`public/branding/`): Dokumentkopf/-fuß über `data-brand="doc-header"`/`"doc-footer"` bzw. `USMSBrand.html.documentHeader(...)`, A4-Druck-CSS, PDF über `window.print()` oder Headless-Chromium (siehe `public/branding/README.md` und `examples/`). Dokumentnummern vergibt der Server pro Jahr in einer Transaktion.
+
+Erweitere `brand.config.js` so, dass jede Institution (USMS, DA, SA, AG, SID, DCLI, District Court, CoA, Supreme Court, Registry, US-SJA, Constitutional Court) eigene Namen, Siegel, Nummernpräfixe und Dokumenttypen haben kann. Bleibt es bei einer zentralen Konfiguration, legt es keine Kopien pro Modul an.
+
+## 8.3 Beispiel: Gerichtsbeschluss
+
+```text
+GERICHTSBESCHLUSS DES UNITED STATES DISTRICT COURT
+
+Vorsitzender Richter:
+Beisitzender Richter:
+Schriftführer:
+
+Kläger:
+Angeklagte Person:
+Anklageschrift:
+
+Beschluss:
+Begründung:
+```
+
+## 8.4 Beispiel: Durchsuchungsbeschluss
+
+```text
+DISTRICT COURT OF THE UNITED STATES OF AMERICA
+
+BESCHLUSS
+
+In dem Ermittlungsverfahren
+wegen des Verdachts [DELIKT]
+
+erlässt das District Court of the United States of America folgenden
+
+BESCHLUSS
+
+Der Antrag auf Erlass eines Durchsuchungsbeschlusses wird [...]
+
+BEGRÜNDUNG
+
+[...]
+
+Hochachtungsvoll
+
+[Titel] [Name]
+[Rang] at the District Court
+```
+
+Name, Rang und Institution des Unterzeichnenden kommen aus der gespeicherten Signatur, nie aus hartcodiertem Text.
+
+## 8.5 Demo-Daten und RP-Hinweis
+
+Demo-Daten werden eindeutig als `DEMO` / `TEST` / `SAMPLE` gekennzeichnet und nie als reale amtliche Datensätze dargestellt. Der RP-Hinweis (`rpNotice` in `brand.config.js`) bleibt auf allen Dokumenten erhalten.
+
+---
+
+# 9. UI, BRANDING UND UX
+
+## 9.1 Designprinzipien
+
+Moderner, seriöser US-Government-/Justice-Look: institutionell, hochwertig, minimalistisch, zurückhaltend, klare Typografie und Informationshierarchie, hervorragende Lesbarkeit. Tabellen, wo Tabellen sinnvoll sind; Cards nur, wo sie sinnvoll sind; nur dezente Animationen.
+
+**Kein** Gaming-Look, kein Cyberpunk, kein Neon, keine übertriebenen Glassmorphism-Effekte, keine unnötigen Animationen. Es soll sich nicht wie ein Gaming-Menü, ein einfacher CRUD-Prototyp oder eine Demo anfühlen.
+
+## 9.2 Branding-Assets
+
+Alle Logos und Siegel liegen zentral in `public/branding/` und werden ausschließlich über die vorhandenen Branding-Komponenten eingebunden (`data-brand="lockup"`, `data-brand="seal"`, `USMSBrand.html.*`). Nirgends werden Logos hardcodiert. Das Siegel gehört nicht auf jede Card.
+
+Keine offensichtlich falschen oder minderwertigen Siegel. Fehlt ein Asset: Platzhalter verwenden (`isPlaceholder: true`), zentral ablegen, austauschbar halten.
+
+## 9.3 Layout und Kontext
+
+* **Global Header:** Logo/Lockup, aktuelles Department und Office, Benutzer, Notifications, Messages, Search.
+* **Sidebar:** abhängig von Department, Office, Rank, Role und Permissions, also nicht überall identisch.
+* **Kontextanzeige:** Der User sieht jederzeit aktuelles Department, Office, Rank, Case und Security Level (z. B. `JUDICIARY · District Court · Senior Judge · Case CR-2026-00142 · Confidential`).
+* **Department Switcher:** Wer mehreren Bereichen angehört, wechselt zwischen ihnen (USMS / Prosecution / Judiciary, innerhalb der Prosecution DA / SA / AG / SID / DCLI). Der Wechsel ändert Navigation und Kontext. Die Berechtigungen bleiben serverseitig kontrolliert.
+* **Quick Actions (optional):** Create Case, Create Document, Search Person/Case, Submit Application, Schedule Hearing, Create Message, Review Request. Nur sichtbar, wenn berechtigt.
+
+## 9.4 Dashboards
+
+* **USMS:** Operations, Warrants, Arrests, Transports, Court Security, Cases, Reports, Notifications
+* **Prosecution:** Active Cases, Investigations, Court Applications, Hearings, Deadlines, Documents, Messages
+* **Judiciary:** Hearings, Applications, Pending Decisions, Warrants, Cases, Documents, Deadlines, Orders
+* **DCLI:** License Applications, Active und Expiring Licenses, Investigations, Inspections, Enforcement, Notifications
+* **Registry:** Registry Applications, Birth und Marriage Records, Adoption Proceedings, Certificates, Pending Requests
+* **US-SJA:** nur für Berechtigte, ohne Informationen aus anderen Bereichen
+
+Alle Kennzahlen stammen aus echten, autorisiert gefilterten Daten.
+
+## 9.5 Formulare
+
+Lange Formulare haben Autosave, Validierung (client- **und** serverseitig), verständliche Fehlermeldungen und wiederherstellbare Entwürfe.
+
+## 9.6 Navigation
+
+Jeder sichtbare Menüpunkt funktioniert oder ist bewusst deaktiviert. Keine leeren Seiten, keine 404-Routen, keine Dummy-Buttons.
+
+## 9.7 Responsive und Accessibility
+
+* Desktop-first (primäre Verwaltungsoberfläche), aber nutzbar auf Laptop, Tablet und Mobile.
+* Tastaturnavigation, ausreichende Kontraste, Labels, Screenreader-Unterstützung, sichtbare Focus States.
+
+## 9.8 Fehlerbehandlung
+
+Normale User sehen keine technischen Fehler (nicht `SQL Error: relation users does not exist`), sondern eine professionelle Meldung. Technische Details gehen ins System Log. Fehlermeldungen verraten nicht die Existenz geschützter Objekte.
+
+---
+
+# 10. TECHNIK
+
+## 10.1 Datenmodell
+
+Sauberes, an die bestehende Architektur angepasstes Schema. Mindestens:
+
+```text
+users  departments  offices  divisions  ranks  roles  permissions
+user_roles  user_permissions  user_compartments  delegations
+security_levels  compartments
+
+cases  case_types  case_participants  case_access  case_events  case_links
+
+documents  document_versions  document_access  document_signatures  document_templates
+
+evidence  evidence_custody
+
+hearings  deadlines
+
+messages  official_requests  notifications
+
+applications  workflows  workflow_instances  workflow_actions
+
+warrants  court_orders  judgments
+
+companies  licenses  license_applications  inspections
+
+registry_records  registry_applications  certificates
+
+persons  person_links
+
+audit_logs
+```
+
+## 10.2 Migrationen
+
+Datenbankänderungen nur über echte Migrationen, keine undokumentierte manuelle Manipulation. Vor destruktiven Migrationen: Backup, Migrationsplan, Rollback-Plan (in `MIGRATION_NOTES.md`).
+
+## 10.3 Security-Checkliste
+
+Authentication, Authorization (inkl. Object-Level), Session Security, Secure Cookies, CSRF, XSS, SQL Injection, Input Validation, File Upload Security, Rate Limiting, Password Hashing, Secrets Management, API Authorization.
+
+## 10.4 Performance
+
+Pagination, Indexierung, Lazy Loading, effiziente Queries (keine N+1), serverseitige Filter, Suchindexierung, Caching, wo sinnvoll. Caching darf Berechtigungsgrenzen nie aufweichen.
+
+## 10.5 Konfiguration
+
+Administrierbar über das **System Administration Center**: Users, Departments, Offices, Divisions, Ranks, Roles, Permissions, Security Levels, Compartments, Case Types, Document Types, Templates, Workflow States, Notification Types, System Settings, Branding, Audit Logs.
+
+## 10.6 Git und Umgebungen
+
+* Vor größeren Änderungen `git status` und `git branch`, bei Bedarf Feature Branch. Keine großen ungetesteten Änderungen direkt auf dem Production Branch.
+* Existiert eine deployte Anwendung: nicht destruktiv auf Production arbeiten, sondern nach Möglichkeit `Development → Staging → Production`.
+
+## 10.7 Dokumentation
+
+Pflichtdateien, laufend aktuell gehalten:
+
+```text
+ARCHITECTURE.md             aktuelles System und Zielarchitektur
+CURRENT_STATE.md            Ist-Stand und Arbeitsfortschritt
+DATA_MODEL.md
+PERMISSIONS.md
+WORKFLOWS.md
+LEGAL_AUTHORITY_MATRIX.md
+SECURITY_MODEL.md           inkl. Security Levels und Compartments
+ARCHITECTURE_DECISIONS.md
+IMPLEMENTATION_PLAN.md      Schritte je Phase mit Abnahmekriterien
+CHANGELOG.md                jede größere Änderung, mit Datum
+MIGRATION_NOTES.md
+```
+
+---
+
+# 11. PRIORITÄTEN
+
+Wenn Zeit oder Kontext begrenzt sind (entspricht der Phasenreihenfolge):
+
+1. Security / Authorization
+2. Datenmodell
+3. Shared Core
+4. Bestehende USMS-Funktionalität erhalten
+5. Judiciary
+6. Prosecution
+7. SID / DCLI / Registry
+8. US-SJA / Constitutional Court
+9. UI-Polishing
+
+Funktionalität ist wichtiger als Optik.
+
+---
+
+# 12. DEFINITION OF DONE
+
+Bevor du sagst „Das System ist fertig“ (oder ein Modul ist fertig), musst du tatsächlich:
+
+1. Build erfolgreich ausführen.
+2. Typecheck und Lint erfolgreich ausführen.
+3. Tests ausführen, inklusive Autorisierungs-Testmatrix (5.10).
+4. Die Hauptseiten öffnen.
+5. Login und Logout testen.
+6. Permissions und Security Boundaries testen, auch direkt gegen die API.
+7. Case-Erstellung testen.
+8. Dokumenterstellung und Signatur testen.
+9. Workflows testen.
+10. Audit Log testen.
+11. Search testen, auch dass geschützte Datensätze nicht auftauchen.
+12. Notifications testen.
+13. Mindestens einen Cross-Department-Workflow durchspielen (z. B. Warrant: Prosecution → Court → USMS → Court).
+14. Keine kritischen Console Errors.
+15. Keine Dead Links.
+
+Berichte ehrlich, was davon erledigt ist und was nicht.
+
+---
+
+# 13. ENDZUSTAND
+
+```text
+                 SAN ANDREAS JUSTICE COMMAND SYSTEM
+                                 │
+       ┌─────────────────────────┼─────────────────────────┐
+       │                         │                         │
+     USMS                   PROSECUTION                JUDICIARY
+                            ├── D.A.                   ├── District Court
+                            ├── S.A.                   ├── Court of Appeals
+                            ├── A.G.                   ├── Supreme Court
+                            ├── SID                    ├── Registry Office
+                            └── DCLI                   ├── US-SJA
+                                                       └── Constitutional Court
+       │                         │                         │
+       └─────────────────────────┼─────────────────────────┘
+                                 │
+                            SHARED CORE
+   Users · Organizations · Permissions · Security Levels · Compartments
+   Cases · Documents · Evidence · Signatures · Workflows · Hearings
+   Deadlines · Messaging · Notifications · Search · Audit Logs
+```
+
+Eine einzige Anwendung, die sich anfühlt wie eine echte, professionelle staatliche Verwaltungs- und Justizplattform.
+
+---
+
+# 14. DEIN ERSTER SCHRITT
+
+Beginne **nicht** sofort mit dem Programmieren.
+
+1. Analysiere das bestehende Projekt (Phase 1).
+2. Erstelle die Bestandsaufnahme (`ARCHITECTURE.md`, `CURRENT_STATE.md`).
+3. Erstelle die Zielarchitektur.
+4. Erstelle das Datenmodell.
+5. Erstelle die Permission-Matrix und das Security-Modell.
+6. Prüfe die ModernV-Rechtsquellen für alle rechtlich relevanten Funktionen und erstelle die Legal Authority Matrix.
+7. Erstelle einen Implementierungsplan.
+8. **Lege Ergebnisse, offene Fragen und Widersprüche vor und warte auf Freigabe.**
+9. Setze danach Phase für Phase um: `IMPLEMENT → TEST → VERIFY → DOCUMENT → CONTINUE`.
+
+Prüfe. Implementiere. Teste. Dokumentiere. Erst dann weiterbauen.
